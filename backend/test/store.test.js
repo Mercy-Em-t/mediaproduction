@@ -60,7 +60,7 @@ test('scene director can create scenes but not tasks', () => {
   );
 });
 
-test('task expiry must be an ISO-8601 timestamp when provided', () => {
+test('task expiresAt must be an ISO-8601 timestamp when provided', () => {
   const store = createStore();
   const project = store.createProject('Timeline', 'manager');
 

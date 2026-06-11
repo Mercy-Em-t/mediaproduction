@@ -14,7 +14,14 @@ const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024 * 1024;
 const MAX_FILES_PER_UPLOAD = 10;
 const RATE_LIMIT_WINDOW_MS = 60 * 1000;
 const RATE_LIMIT_MAX_REQUESTS = 60;
-const AUTH_HMAC_SECRET = process.env.AUTH_HMAC_SECRET || 'dev-only-change-me';
+const AUTH_HMAC_SECRET = process.env.AUTH_HMAC_SECRET;
+if (!AUTH_HMAC_SECRET && process.env.NODE_ENV === 'production') {
+  throw new Error('AUTH_HMAC_SECRET is required in production');
+}
+if (!AUTH_HMAC_SECRET && process.env.NODE_ENV !== 'production') {
+  console.warn('AUTH_HMAC_SECRET is not set; using development default');
+}
+const AUTH_HMAC_SECRET_EFFECTIVE = AUTH_HMAC_SECRET || 'dev-only-change-me';
 const FILE_ACCESS_RATE_LIMITER = rateLimit({
   windowMs: RATE_LIMIT_WINDOW_MS,
   max: RATE_LIMIT_MAX_REQUESTS,
@@ -77,7 +84,10 @@ function getActor(req) {
     throw new Error('x-user-signature header is required');
   }
 
-  const expected = crypto.createHmac('sha256', AUTH_HMAC_SECRET).update(actorId).digest('hex');
+  const expected = crypto
+    .createHmac('sha256', AUTH_HMAC_SECRET_EFFECTIVE)
+    .update(actorId)
+    .digest('hex');
   const actualBuffer = Buffer.from(actorSignature, 'hex');
   const expectedBuffer = Buffer.from(expected, 'hex');
   if (
@@ -190,7 +200,7 @@ app.get('/api/projects/:projectId/files/:fileId/preview', FILE_ACCESS_RATE_LIMIT
 app.use((error, req, res, next) => {
   if (error) {
     const status = error.statusCode || error.status || 400;
-    const message = status >= 500 ? 'Internal server error' : 'Request failed';
+    const message = status >= 500 ? 'Internal server error' : error.message;
     res.status(status).json({ error: message });
     return;
   }
