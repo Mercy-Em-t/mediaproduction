@@ -33,7 +33,12 @@ class MediaProductionStore {
     };
 
     this.projects.set(id, project);
-    fs.mkdirSync(path.join(this.storageRoot, id), { recursive: true });
+    try {
+      fs.mkdirSync(path.join(this.storageRoot, id), { recursive: true });
+    } catch (error) {
+      this.projects.delete(id);
+      throw new Error('Project storage initialization failed');
+    }
 
     return { id, name, createdAt: now };
   }
@@ -88,6 +93,9 @@ class MediaProductionStore {
     const project = this.requireProject(projectId);
     if (!this.hasRole(projectId, actorId, ['project_manager'])) {
       throw new Error('Only project managers can create tasks');
+    }
+    if (payload.expiresAt && Number.isNaN(Date.parse(payload.expiresAt))) {
+      throw new Error('expiresAt must be an ISO-8601 timestamp');
     }
 
     const task = {

@@ -47,7 +47,12 @@ npm start
 - `GET /api/projects/:projectId/files/:fileId/download`
 - `GET /api/projects/:projectId/files/:fileId/preview`
 
-All endpoints require header `x-user-id`.
+All endpoints require:
+
+- `x-user-id`
+- `x-user-signature` (HMAC-SHA256 hex digest of `x-user-id` using `AUTH_HMAC_SECRET`)
+
+For local development, set `AUTH_HMAC_SECRET` before starting the server.
 
 ## Roadmap
 

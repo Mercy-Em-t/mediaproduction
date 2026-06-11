@@ -1,5 +1,6 @@
 const path = require('node:path');
 const fs = require('node:fs');
+const crypto = require('node:crypto');
 const express = require('express');
 const multer = require('multer');
 const rateLimit = require('express-rate-limit');
@@ -9,11 +10,14 @@ const STORAGE_ROOT = path.resolve(__dirname, '..', 'storage');
 fs.mkdirSync(STORAGE_ROOT, { recursive: true });
 
 const store = new MediaProductionStore(STORAGE_ROOT);
-const ONE_GB_IN_BYTES = 1 * 1024 * 1024 * 1024;
+const MAX_FILE_SIZE_BYTES = 1 * 1024 * 1024 * 1024;
 const MAX_FILES_PER_UPLOAD = 10;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 60;
+const AUTH_HMAC_SECRET = process.env.AUTH_HMAC_SECRET || 'dev-only-change-me';
 const FILE_ACCESS_RATE_LIMITER = rateLimit({
-  windowMs: 60 * 1000,
-  max: 60,
+  windowMs: RATE_LIMIT_WINDOW_MS,
+  max: RATE_LIMIT_MAX_REQUESTS,
   standardHeaders: true,
   legacyHeaders: false
 });
@@ -21,7 +25,7 @@ const FILE_ACCESS_RATE_LIMITER = rateLimit({
 const app = express();
 app.use(express.json());
 
-const sanitize = (value) => String(value).replace(/[^a-zA-Z0-9._-]/g, '_');
+const sanitize = (value) => String(value).replace(/[^a-zA-Z0-9_-]/g, '_');
 
 const upload = multer({
   storage: multer.diskStorage({
@@ -60,13 +64,27 @@ const upload = multer({
 
     cb(new Error('Unsupported file type'));
   },
-  limits: { files: MAX_FILES_PER_UPLOAD, fileSize: ONE_GB_IN_BYTES }
+  limits: { files: MAX_FILES_PER_UPLOAD, fileSize: MAX_FILE_SIZE_BYTES }
 });
 
 function getActor(req) {
   const actorId = req.header('x-user-id');
+  const actorSignature = req.header('x-user-signature');
   if (!actorId) {
     throw new Error('x-user-id header is required');
+  }
+  if (!actorSignature) {
+    throw new Error('x-user-signature header is required');
+  }
+
+  const expected = crypto.createHmac('sha256', AUTH_HMAC_SECRET).update(actorId).digest('hex');
+  const actualBuffer = Buffer.from(actorSignature, 'hex');
+  const expectedBuffer = Buffer.from(expected, 'hex');
+  if (
+    actualBuffer.length !== expectedBuffer.length ||
+    !crypto.timingSafeEqual(actualBuffer, expectedBuffer)
+  ) {
+    throw new Error('Invalid user signature');
   }
   return actorId;
 }
@@ -171,7 +189,9 @@ app.get('/api/projects/:projectId/files/:fileId/preview', FILE_ACCESS_RATE_LIMIT
 
 app.use((error, req, res, next) => {
   if (error) {
-    res.status(400).json({ error: error.message });
+    const status = error.statusCode || error.status || 400;
+    const message = status >= 500 ? 'Internal server error' : 'Request failed';
+    res.status(status).json({ error: message });
     return;
   }
   next();

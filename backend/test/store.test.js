@@ -2,6 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const os = require('node:os');
 const path = require('node:path');
+const fs = require('node:fs');
 const { randomUUID } = require('node:crypto');
 const { MediaProductionStore } = require('../src/store');
 
@@ -15,6 +16,9 @@ test('project manager can create isolated projects and members cannot cross acce
 
   const a = store.createProject('A', 'manager-a');
   const b = store.createProject('B', 'manager-b');
+
+  assert.equal(fs.existsSync(path.join(store.storageRoot, a.id)), true);
+  assert.equal(fs.existsSync(path.join(store.storageRoot, b.id)), true);
 
   store.addMember(a.id, 'manager-a', 'viewer-a', 'viewer');
   assert.deepEqual(store.listFiles(a.id, 'viewer-a'), []);
@@ -53,5 +57,15 @@ test('scene director can create scenes but not tasks', () => {
   assert.throws(
     () => store.createTask(project.id, 'director', { title: 'Edit cut' }),
     /Only project managers/
+  );
+});
+
+test('task expiry must be an ISO-8601 timestamp when provided', () => {
+  const store = createStore();
+  const project = store.createProject('Timeline', 'manager');
+
+  assert.throws(
+    () => store.createTask(project.id, 'manager', { title: 'Render', expiresAt: 'soon' }),
+    /expiresAt must be an ISO-8601 timestamp/
   );
 });
