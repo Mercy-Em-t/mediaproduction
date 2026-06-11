@@ -111,7 +111,7 @@ app.post('/api/projects/:projectId/tasks', (req, res) => {
   }
 });
 
-app.post('/api/projects/:projectId/files/upload', upload.array('files', 10), (req, res) => {
+app.post('/api/projects/:projectId/files/upload', upload.array('files', MAX_FILES_PER_UPLOAD), (req, res) => {
   try {
     const actorId = getActor(req);
     const files = req.files.map((file) => {
