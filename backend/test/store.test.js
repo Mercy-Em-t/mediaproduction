@@ -2,10 +2,11 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const os = require('node:os');
 const path = require('node:path');
+const { randomUUID } = require('node:crypto');
 const { MediaProductionStore } = require('../src/store');
 
 function createStore() {
-  const root = path.join(os.tmpdir(), `mediaproduction-${Date.now()}-${Math.random()}`);
+  const root = path.join(os.tmpdir(), `mediaproduction-${randomUUID()}`);
   return new MediaProductionStore(root);
 }
 

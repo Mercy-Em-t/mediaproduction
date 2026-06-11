@@ -30,7 +30,7 @@ A lightweight prototype for collaborative media production workflows with strict
 ## Quick Start
 
 ```bash
-cd /home/runner/work/mediaproduction/mediaproduction/Mercy-Em-t/mediaproduction/backend
+cd backend
 npm install
 npm test
 npm start

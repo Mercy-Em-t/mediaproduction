@@ -8,6 +8,10 @@ const STORAGE_ROOT = path.resolve(__dirname, '..', 'storage');
 fs.mkdirSync(STORAGE_ROOT, { recursive: true });
 
 const store = new MediaProductionStore(STORAGE_ROOT);
+const MAX_FILE_SIZE_BYTES = 1024 * 1024 * 1024;
+const RATE_LIMIT_WINDOW_MS = 60 * 1000;
+const RATE_LIMIT_MAX_REQUESTS = 60;
+const requestBuckets = new Map();
 
 const app = express();
 app.use(express.json());
@@ -51,7 +55,7 @@ const upload = multer({
 
     cb(new Error('Unsupported file type'));
   },
-  limits: { files: 10, fileSize: 1024 * 1024 * 1024 }
+  limits: { files: 10, fileSize: MAX_FILE_SIZE_BYTES }
 });
 
 function getActor(req) {
@@ -60,6 +64,26 @@ function getActor(req) {
     throw new Error('x-user-id header is required');
   }
   return actorId;
+}
+
+function withRateLimit(req, res, next) {
+  const key = `${req.ip}:${req.path}`;
+  const now = Date.now();
+  const bucket = requestBuckets.get(key);
+
+  if (!bucket || now - bucket.windowStart > RATE_LIMIT_WINDOW_MS) {
+    requestBuckets.set(key, { windowStart: now, count: 1 });
+    next();
+    return;
+  }
+
+  if (bucket.count >= RATE_LIMIT_MAX_REQUESTS) {
+    res.status(429).json({ error: 'Rate limit exceeded' });
+    return;
+  }
+
+  bucket.count += 1;
+  next();
 }
 
 app.post('/api/projects', (req, res) => {
@@ -123,7 +147,7 @@ app.post('/api/projects/:projectId/files/upload', upload.array('files', 10), (re
   }
 });
 
-app.get('/api/projects/:projectId/files', (req, res) => {
+app.get('/api/projects/:projectId/files', withRateLimit, (req, res) => {
   try {
     const actorId = getActor(req);
     const files = store.listFiles(req.params.projectId, actorId);
@@ -133,7 +157,7 @@ app.get('/api/projects/:projectId/files', (req, res) => {
   }
 });
 
-app.get('/api/projects/:projectId/files/:fileId/download', (req, res) => {
+app.get('/api/projects/:projectId/files/:fileId/download', withRateLimit, (req, res) => {
   try {
     const actorId = getActor(req);
     const file = store.getFile(req.params.projectId, actorId, req.params.fileId);
@@ -143,7 +167,7 @@ app.get('/api/projects/:projectId/files/:fileId/download', (req, res) => {
   }
 });
 
-app.get('/api/projects/:projectId/files/:fileId/preview', (req, res) => {
+app.get('/api/projects/:projectId/files/:fileId/preview', withRateLimit, (req, res) => {
   try {
     const actorId = getActor(req);
     const file = store.getFile(req.params.projectId, actorId, req.params.fileId);
