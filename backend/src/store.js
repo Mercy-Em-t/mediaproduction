@@ -95,7 +95,7 @@ class MediaProductionStore {
       title: payload.title,
       assignee: payload.assignee,
       deadline: payload.deadline,
-      expiresAt: payload.expiresAt,
+      jobExpiresAt: payload.jobExpiresAt ?? payload.expiresAt,
       createdAt: new Date().toISOString()
     };
 

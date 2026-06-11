@@ -17,6 +17,7 @@ test('project manager can create isolated projects and members cannot cross acce
   const b = store.createProject('B', 'manager-b');
 
   store.addMember(a.id, 'manager-a', 'viewer-a', 'viewer');
+  assert.deepEqual(store.listFiles(a.id, 'viewer-a'), []);
 
   assert.throws(() => store.listFiles(b.id, 'viewer-a'), /Not authorized/);
 });
